@@ -49,7 +49,7 @@ func trim(input, output string, removeFirst, removeLast float64) {
 		"ss": start,
 		"to": end,
 	}).
-		Output(trimOutput, ffmpeg.KwArgs{
+		Output(output, ffmpeg.KwArgs{
 			"c": "copy",
 		}).
 		OverWriteOutput()
@@ -64,7 +64,7 @@ func trim(input, output string, removeFirst, removeLast float64) {
 		log.Fatalf("ffmpeg error: %v", err)
 	}
 
-	fmt.Printf("saved trimmed video to %s\n", trimOutput)
+	fmt.Printf("saved trimmed video to %s\n", output)
 }
 
 type probeFormat struct {

@@ -1,6 +1,3 @@
-/*
-Copyright © 2026 NAME HERE <EMAIL ADDRESS>
-*/
 package cmd
 
 import (
@@ -15,7 +12,7 @@ import (
 )
 
 const (
-	PROGRESS = "iosi-editor-progress"
+	PROGRESS = "watermill-cli-progress"
 	EDITED   = "_edited"
 )
 
@@ -25,11 +22,12 @@ var videoExt = map[string]struct{}{
 }
 
 var (
-	root           string = "."
-	intro          string
-	outro          string
-	runRemoveFirst float64
-	runRemoveLast  float64
+	root             string = "."
+	intro            string
+	outro            string
+	runRemoveFirst   float64
+	runRemoveLast    float64
+	runNormalize     bool
 )
 
 var runCmd = &cobra.Command{
@@ -42,7 +40,7 @@ var runCmd = &cobra.Command{
 
 		progress := loadProgress()
 
-		progressFile, err := os.OpenFile(PROGRESS, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+		progressFile, err := os.OpenFile(root+"/"+PROGRESS, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
 			log.Println(err)
 		}
@@ -61,15 +59,34 @@ var runCmd = &cobra.Command{
 				defer wg.Done()
 				defer func() { <-videos }()
 
-				outputPath := path + "_edited.mov"
+				ext := filepath.Ext(path)
+				base := strings.TrimSuffix(path, ext)
+				outputPath := base + "_edited" + ext
+				concatPath := base + "_concat" + ext
+
+				normPath := base + "_norm" + ext
 
 				trim(path, outputPath, runRemoveFirst, runRemoveLast)
-				concatenate([]string{intro, outputPath, outro}, outputPath)
+
+				inputForConcat := outputPath
+				if runNormalize {
+					normalize(outputPath, normPath)
+					inputForConcat = normPath
+				}
+
+				concatenate([]string{intro, inputForConcat, outro}, concatPath)
+
+				if runNormalize {
+					os.Remove(normPath)
+				}
+
+				if err := os.Rename(concatPath, outputPath); err != nil {
+					log.Fatalf("failed to replace edited file: %v", err)
+				}
 
 				mu.Lock()
 				fmt.Fprintln(progressFile, path)
 				mu.Unlock()
-
 			}(path)
 		}
 
@@ -82,6 +99,7 @@ func init() {
 	runCmd.Flags().StringVarP(&outro, "outro", "o", "outro.mp4", "The video outro file path")
 	runCmd.Flags().Float64Var(&runRemoveFirst, "removeFirst", 0, "Seconds to remove from the beginning")
 	runCmd.Flags().Float64Var(&runRemoveLast, "removeLast", 0, "Seconds to remove from the end")
+	runCmd.Flags().BoolVar(&runNormalize, "normalize", true, "Normalize audio levels")
 
 	rootCmd.AddCommand(runCmd)
 }
@@ -107,18 +125,21 @@ func loadProgress() map[string]struct{} {
 func scanDir() map[string]struct{} {
 	filePaths := make(map[string]struct{})
 
+	introBase := filepath.Base(intro)
+	outroBase := filepath.Base(outro)
+
 	err := filepath.Walk(root, func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
 		}
 
-		fullFileName := info.Name()
-		ext := filepath.Ext(fullFileName)
-		fileName := strings.TrimSuffix(fullFileName, ext)
+		baseName := info.Name()
+		ext := filepath.Ext(baseName)
+		fileName := strings.TrimSuffix(baseName, ext)
 		notEdited := !strings.HasSuffix(fileName, EDITED)
 		_, validVideo := videoExt[ext]
 
-		if notEdited && validVideo && fullFileName != intro && fullFileName != outro {
+		if notEdited && validVideo && baseName != introBase && baseName != outroBase {
 			filePaths[path] = struct{}{}
 		}
 
