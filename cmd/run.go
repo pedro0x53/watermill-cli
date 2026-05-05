@@ -14,7 +14,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const PROGRESS = "iosi-editor-progress"
+const (
+	PROGRESS = "iosi-editor-progress"
+	EDITED   = "_edited"
+)
 
 var videoExt = map[string]struct{}{
 	".mp4": {},
@@ -22,7 +25,7 @@ var videoExt = map[string]struct{}{
 }
 
 var (
-	root string = "."
+	root           string = "."
 	intro          string
 	outro          string
 	runRemoveFirst float64
@@ -58,7 +61,7 @@ var runCmd = &cobra.Command{
 				defer wg.Done()
 				defer func() { <-videos }()
 
-				outputPath := path+"_edited.mov"
+				outputPath := path + "_edited.mov"
 
 				trim(path, outputPath, runRemoveFirst, runRemoveLast)
 				concatenate([]string{intro, outputPath, outro}, outputPath)
@@ -109,9 +112,13 @@ func scanDir() map[string]struct{} {
 			return err
 		}
 
-		fileName := info.Name()
-		ext := filepath.Ext(fileName)
-		if _, validVideo := videoExt[ext]; validVideo && fileName != intro && fileName != outro {
+		fullFileName := info.Name()
+		ext := filepath.Ext(fullFileName)
+		fileName := strings.TrimSuffix(fullFileName, ext)
+		notEdited := !strings.HasSuffix(fileName, EDITED)
+		_, validVideo := videoExt[ext]
+
+		if notEdited && validVideo && fullFileName != intro && fullFileName != outro {
 			filePaths[path] = struct{}{}
 		}
 
