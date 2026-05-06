@@ -13,7 +13,7 @@ const WATERMIL = "watermill-cli"
 var verbose bool
 
 var rootCmd = &cobra.Command{
-	Use:   "iosi-editor",
+	Use:   "watermill-cli",
 	Short: "A simple video editor CLI",
 	PersistentPreRun: func(cmd *cobra.Command, args []string) {
 		if !verbose {
