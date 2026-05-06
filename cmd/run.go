@@ -14,6 +14,8 @@ import (
 const (
 	PROGRESS = "watermill-cli-progress"
 	EDITED   = "_edited"
+	INTRO    = "intro.mp4"
+	OUTRO    = "outro.mp4"
 )
 
 var videoExt = map[string]struct{}{
@@ -22,12 +24,11 @@ var videoExt = map[string]struct{}{
 }
 
 var (
-	root             string = "."
-	intro            string
-	outro            string
-	runRemoveFirst   float64
-	runRemoveLast    float64
-	runNormalize     bool
+	root           string
+	intro          string
+	outro          string
+	runRemoveFirst float64
+	runRemoveLast  float64
 )
 
 var runCmd = &cobra.Command{
@@ -40,9 +41,14 @@ var runCmd = &cobra.Command{
 
 		progress := loadProgress()
 
+		if len(progress) == 0 {
+			log.Println("No pending files were found")
+			os.Exit(0)
+		}
+
 		progressFile, err := os.OpenFile(root+"/"+PROGRESS, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
-			log.Println(err)
+			log.Fatalln(err)
 		}
 
 		defer progressFile.Close()
@@ -62,26 +68,28 @@ var runCmd = &cobra.Command{
 				ext := filepath.Ext(path)
 				base := strings.TrimSuffix(path, ext)
 				outputPath := base + "_edited" + ext
-				concatPath := base + "_concat" + ext
-
-				normPath := base + "_norm" + ext
+				concatPath := base + "_tmp" + ext
 
 				trim(path, outputPath, runRemoveFirst, runRemoveLast)
 
-				inputForConcat := outputPath
-				if runNormalize {
-					normalize(outputPath, normPath)
-					inputForConcat = normPath
+				introPath := intro
+				if intro == INTRO {
+					introPath = root + "/" + intro
 				}
 
-				concatenate([]string{intro, inputForConcat, outro}, concatPath)
-
-				if runNormalize {
-					os.Remove(normPath)
+				outroPath := outro
+				if outro == OUTRO {
+					outroPath = root + "/" + outro
 				}
+
+				concatenate([]string{introPath, outputPath, outroPath}, concatPath)
 
 				if err := os.Rename(concatPath, outputPath); err != nil {
 					log.Fatalf("failed to replace edited file: %v", err)
+				}
+
+				if verbose {
+					fmt.Printf(WATERMIL+": renamed %v to %v", concatPath, outputPath)
 				}
 
 				mu.Lock()
@@ -95,11 +103,10 @@ var runCmd = &cobra.Command{
 }
 
 func init() {
-	runCmd.Flags().StringVarP(&intro, "intro", "i", "intro.mp4", "The video intro file path")
-	runCmd.Flags().StringVarP(&outro, "outro", "o", "outro.mp4", "The video outro file path")
+	runCmd.Flags().StringVarP(&intro, "intro", "i", INTRO, "The video intro file path")
+	runCmd.Flags().StringVarP(&outro, "outro", "o", OUTRO, "The video outro file path")
 	runCmd.Flags().Float64Var(&runRemoveFirst, "removeFirst", 0, "Seconds to remove from the beginning")
 	runCmd.Flags().Float64Var(&runRemoveLast, "removeLast", 0, "Seconds to remove from the end")
-	runCmd.Flags().BoolVar(&runNormalize, "normalize", true, "Normalize audio levels")
 
 	rootCmd.AddCommand(runCmd)
 }
@@ -107,15 +114,22 @@ func init() {
 func loadProgress() map[string]struct{} {
 	allFilePaths := scanDir()
 
-	data, err := os.ReadFile(PROGRESS)
+	data, err := os.ReadFile(root + "/" + PROGRESS)
 
 	if err != nil {
 		return allFilePaths
 	}
 
 	for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
+		if verbose {
+			fmt.Println(WATERMIL+":", line, "found")
+		}
+
 		if line != "" {
 			delete(allFilePaths, line)
+			if verbose {
+				fmt.Println(WATERMIL+":", line, "already edited")
+			}
 		}
 	}
 
@@ -136,10 +150,12 @@ func scanDir() map[string]struct{} {
 		baseName := info.Name()
 		ext := filepath.Ext(baseName)
 		fileName := strings.TrimSuffix(baseName, ext)
-		notEdited := !strings.HasSuffix(fileName, EDITED)
-		_, validVideo := videoExt[ext]
+		isEdited := strings.HasSuffix(fileName, EDITED)
+		isIntro := baseName == introBase
+		isOutro := baseName == outroBase
+		_, isValid := videoExt[ext]
 
-		if notEdited && validVideo && baseName != introBase && baseName != outroBase {
+		if !isEdited && isValid && !isIntro && !isOutro {
 			filePaths[path] = struct{}{}
 		}
 
@@ -147,7 +163,7 @@ func scanDir() map[string]struct{} {
 	})
 
 	if err != nil {
-		log.Println(err)
+		log.Fatal(err)
 	}
 
 	return filePaths

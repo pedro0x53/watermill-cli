@@ -56,5 +56,7 @@ func concatenate(inputs []string, output string) {
 		log.Fatalf("ffmpeg error: %v", err)
 	}
 
-	fmt.Printf("concatenated %d videos into %s\n", len(inputs), output)
+	if verbose { 
+		fmt.Printf(WATERMIL+": concatenated %d videos into %s\n", len(inputs), output)
+	}
 }

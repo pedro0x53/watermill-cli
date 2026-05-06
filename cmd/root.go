@@ -1,10 +1,13 @@
 package cmd
 
 import (
+	"log"
 	"os"
 
 	"github.com/spf13/cobra"
 )
+
+const WATERMIL = "watermill-cli"
 
 var verbose bool
 
@@ -21,5 +24,6 @@ func Execute() {
 }
 
 func init() {
+	log.SetPrefix(WATERMIL + ": ")
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "Show ffmpeg output")
 }

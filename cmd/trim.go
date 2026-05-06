@@ -64,7 +64,9 @@ func trim(input, output string, removeFirst, removeLast float64) {
 		log.Fatalf("ffmpeg error: %v", err)
 	}
 
-	fmt.Printf("saved trimmed video to %s\n", output)
+	if verbose {
+		fmt.Printf(WATERMIL+": saved trimmed video to %s\n", output)
+	}
 }
 
 type probeFormat struct {
