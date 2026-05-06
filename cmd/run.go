@@ -14,6 +14,7 @@ import (
 const (
 	PROGRESS = "watermill-cli-progress"
 	EDITED   = "_edited"
+	TMP      = "_tmp"
 	INTRO    = "intro.mp4"
 	OUTRO    = "outro.mp4"
 )
@@ -70,7 +71,19 @@ var runCmd = &cobra.Command{
 				outputPath := base + "_edited" + ext
 				concatPath := base + "_tmp" + ext
 
-				trim(path, outputPath, runRemoveFirst, runRemoveLast)
+				if err := trim(path, outputPath, runRemoveFirst, runRemoveLast); err != nil {
+					message := fmt.Sprintf("trim failed on path %v", path)
+
+					if !verbose {
+						fmt.Fprintf(os.Stderr, WATERMIL+": %v", message)
+					}
+
+					log.Println(message)
+
+					os.Remove(outputPath)
+
+					return
+				}
 
 				introPath := intro
 				if intro == INTRO {
@@ -82,14 +95,32 @@ var runCmd = &cobra.Command{
 					outroPath = root + "/" + outro
 				}
 
-				concatenate([]string{introPath, outputPath, outroPath}, concatPath)
+				if err := concatenate([]string{introPath, outputPath, outroPath}, concatPath); err != nil {
+					message := fmt.Sprintf("concatenate failed on path %v", path)
+
+					if !verbose {
+						fmt.Fprintf(os.Stderr, WATERMIL+": %v", message)
+					}
+
+					log.Println(message)
+
+					os.Remove(outputPath)
+					os.Remove(concatPath)
+
+					return
+				}
 
 				if err := os.Rename(concatPath, outputPath); err != nil {
-					log.Fatalf("failed to replace edited file: %v", err)
+					log.Printf("failed to replace edited file: %v", err)
+
+					os.Remove(outputPath)
+					os.Remove(concatPath)
+
+					return
 				}
 
 				if verbose {
-					fmt.Printf(WATERMIL+": renamed %v to %v", concatPath, outputPath)
+					log.Printf("renamed %v to %v", concatPath, outputPath)
 				}
 
 				mu.Lock()
@@ -122,13 +153,13 @@ func loadProgress() map[string]struct{} {
 
 	for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
 		if verbose {
-			fmt.Println(WATERMIL+":", line, "found")
+			log.Println(line, "found")
 		}
 
 		if line != "" {
 			delete(allFilePaths, line)
 			if verbose {
-				fmt.Println(WATERMIL+":", line, "already edited")
+				log.Println(line, "already edited")
 			}
 		}
 	}
@@ -150,12 +181,14 @@ func scanDir() map[string]struct{} {
 		baseName := info.Name()
 		ext := filepath.Ext(baseName)
 		fileName := strings.TrimSuffix(baseName, ext)
+
 		isEdited := strings.HasSuffix(fileName, EDITED)
+		isTmp := strings.HasSuffix(fileName, TMP)
 		isIntro := baseName == introBase
 		isOutro := baseName == outroBase
 		_, isValid := videoExt[ext]
 
-		if !isEdited && isValid && !isIntro && !isOutro {
+		if !isEdited && !isTmp && isValid && !isIntro && !isOutro {
 			filePaths[path] = struct{}{}
 		}
 

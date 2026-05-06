@@ -20,7 +20,11 @@ var trimCmd = &cobra.Command{
 	Use:   "trim [input]",
 	Short: "Trim the begining and/or end of a video",
 	Run: func(cmd *cobra.Command, args []string) {
-		trim(args[0], trimOutput, removeFirst, removeLast)
+		err := trim(args[0], trimOutput, removeFirst, removeLast)
+		if err != nil {
+			log.Println(err)
+			log.Printf("trim failed on path: %v", args[0])
+		}
 	},
 }
 
@@ -32,17 +36,20 @@ func init() {
 	rootCmd.AddCommand(trimCmd)
 }
 
-func trim(input, output string, removeFirst, removeLast float64) {
+func trim(input, output string, removeFirst, removeLast float64) error {
 	duration, err := getVideoDuration(input)
 	if err != nil {
-		log.Fatalf("failed to probe video: %v", err)
+		log.Printf("failed to probe video: %v", err)
+		return err
 	}
 
-	start := removeFirst + 1
+	start := removeFirst
 	end := duration - removeLast
 
 	if end <= start {
-		log.Fatalf("resulting duration is zero or negative (start=%.2f, end=%.2f)", start-1, end)
+		err := fmt.Errorf("resulting duration is zero or negative (start=%.2f, end=%.2f)", start, end)
+		log.Print(err)
+		return err
 	}
 
 	trimmer := ffmpeg.Input(input, ffmpeg.KwArgs{
@@ -61,12 +68,15 @@ func trim(input, output string, removeFirst, removeLast float64) {
 	err = trimmer.Run()
 
 	if err != nil {
-		log.Fatalf("ffmpeg error: %v", err)
+		log.Printf("ffmpeg error: %v", err)
+		return err
 	}
 
 	if verbose {
-		fmt.Printf(WATERMIL+": saved trimmed video to %s\n", output)
+		log.Printf("saved trimmed video to %s", output)
 	}
+
+	return nil
 }
 
 type probeFormat struct {

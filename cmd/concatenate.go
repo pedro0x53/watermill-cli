@@ -1,7 +1,6 @@
 package cmd
 
 import (
-	"fmt"
 	"log"
 
 	"github.com/spf13/cobra"
@@ -18,7 +17,11 @@ var concatenateCmd = &cobra.Command{
 	Short: "Concatenate multiple videos into one",
 	Args:  cobra.MinimumNArgs(2),
 	Run: func(cmd *cobra.Command, args []string) {
-		concatenate(args, concatOutput)
+		err := concatenate(args, concatOutput)
+		if err != nil {
+			log.Println(err)
+			log.Printf("concatenate failed on paths: %v", args)
+		}
 	},
 }
 
@@ -29,7 +32,7 @@ func init() {
 	rootCmd.AddCommand(concatenateCmd)
 }
 
-func concatenate(inputs []string, output string) {
+func concatenate(inputs []string, output string) error {
 	streams := make([]*ffmpeg.Stream, len(inputs)*2)
 	for i, input := range inputs {
 		in := ffmpeg.Input(input)
@@ -53,10 +56,13 @@ func concatenate(inputs []string, output string) {
 	err := concatenator.Run()
 
 	if err != nil {
-		log.Fatalf("ffmpeg error: %v", err)
+		log.Printf("ffmpeg error: %v", err)
+		return err
 	}
 
 	if verbose { 
-		fmt.Printf(WATERMIL+": concatenated %d videos into %s\n", len(inputs), output)
+		log.Printf("concatenated %d videos into %s", len(inputs), output)
 	}
+
+	return nil
 }
