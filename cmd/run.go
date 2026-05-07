@@ -25,7 +25,7 @@ var videoExt = map[string]struct{}{
 }
 
 var (
-	root           string
+	root           string = "."
 	intro          string
 	outro          string
 	runRemoveFirst float64
@@ -47,7 +47,7 @@ var runCmd = &cobra.Command{
 			os.Exit(0)
 		}
 
-		progressFile, err := os.OpenFile(root+"/"+PROGRESS, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
+		progressFile, err := os.OpenFile(filepath.Join(root, PROGRESS), os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0666)
 		if err != nil {
 			log.Fatalln(err)
 		}
@@ -75,7 +75,7 @@ var runCmd = &cobra.Command{
 					message := fmt.Sprintf("trim failed on path %v", path)
 
 					if !verbose {
-						fmt.Fprintf(os.Stderr, WATERMIL+": %v", message)
+						fmt.Fprintf(os.Stderr, WATERMIL+": %v\n", message)
 					}
 
 					log.Println(message)
@@ -87,19 +87,19 @@ var runCmd = &cobra.Command{
 
 				introPath := intro
 				if intro == INTRO {
-					introPath = root + "/" + intro
+					introPath = filepath.Join(root, intro)
 				}
 
 				outroPath := outro
 				if outro == OUTRO {
-					outroPath = root + "/" + outro
+					outroPath = filepath.Join(root, outro)
 				}
 
 				if err := concatenate([]string{introPath, outputPath, outroPath}, concatPath); err != nil {
 					message := fmt.Sprintf("concatenate failed on path %v", path)
 
 					if !verbose {
-						fmt.Fprintf(os.Stderr, WATERMIL+": %v", message)
+						fmt.Fprintf(os.Stderr, WATERMIL+": %v\n", message)
 					}
 
 					log.Println(message)
@@ -145,13 +145,14 @@ func init() {
 func loadProgress() map[string]struct{} {
 	allFilePaths := scanDir()
 
-	data, err := os.ReadFile(root + "/" + PROGRESS)
+	data, err := os.ReadFile(filepath.Join(root, PROGRESS))
 
 	if err != nil {
 		return allFilePaths
 	}
 
 	for line := range strings.SplitSeq(strings.TrimSpace(string(data)), "\n") {
+		line = strings.TrimRight(line, "\r")
 		if verbose {
 			log.Println(line, "found")
 		}
@@ -186,7 +187,7 @@ func scanDir() map[string]struct{} {
 		isTmp := strings.HasSuffix(fileName, TMP)
 		isIntro := baseName == introBase
 		isOutro := baseName == outroBase
-		_, isValid := videoExt[ext]
+		_, isValid := videoExt[strings.ToLower(ext)]
 
 		if !isEdited && !isTmp && isValid && !isIntro && !isOutro {
 			filePaths[path] = struct{}{}
